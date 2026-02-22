@@ -4,6 +4,10 @@ from discord.ext import commands
 import config
 from flask import Flask
 from threading import Thread
+from discord.errors import HTTPException, RateLimited
+import asyncio
+
+
 intents = discord.Intents.default()
 intents.members = True
 app = Flask('')
@@ -25,7 +29,12 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 
 GUILD_ID = config.GUILD_ID 
 MY_GUILD = discord.Object(id=GUILD_ID)
-
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, RateLimited) or (isinstance(error, HTTPException) and error.status == 429):
+        retry_after = error.retry_after if hasattr(error, 'retry_after') else 60
+        print(f"Rate limited! Waiting {retry_after} seconds...")
+        await asyncio.sleep(retry_after)
 
 @bot.event
 async def on_message(message):
