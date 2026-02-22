@@ -6,6 +6,7 @@ from flask import Flask
 from threading import Thread
 from discord.errors import HTTPException, RateLimited
 import asyncio
+import sys
 
 
 intents = discord.Intents.default()
@@ -35,7 +36,34 @@ async def on_command_error(ctx, error):
         retry_after = error.retry_after if hasattr(error, 'retry_after') else 60
         print(f"Rate limited! Waiting {retry_after} seconds...")
         await asyncio.sleep(retry_after)
-
+@bot.event
+async def on_ready():
+    print(f'Бот {bot.user} запущен!')
+    try:
+        # Проверяем, не забанен ли IP перед синхронизацией
+        test_channel = bot.get_channel(config.LOG_CHANNEL_ID)
+        if test_channel:
+            try:
+                await test_channel.send("🟢 Бот запущен")
+            except Exception as e:
+                if "429" in str(e):
+                    print("⚠️ IP забанен Discord, ждем 30 минут...")
+                    await asyncio.sleep(1800)  # 30 минут
+                    # После ожидания пробуем синхронизацию
+                    await bot.tree.sync(guild=MY_GUILD)
+            else:
+                # Если отправка успешна - синхронизируем
+                bot.tree.copy_global_to(guild=MY_GUILD)
+                await bot.tree.sync(guild=MY_GUILD)
+                print('Команды синхронизированы')
+    except Exception as e:
+        print(f'Ошибка: {e}')
+        if "429" in str(e):
+            print("⚠️ Получен бан, останавливаем бота на 30 минут...")
+            await asyncio.sleep(1800)
+            # Перезапускаем бота
+            await bot.close()
+            sys.exit(0)  # Render перезапустит, но мы уже подождали
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
